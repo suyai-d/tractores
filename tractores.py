@@ -1,5 +1,10 @@
 import streamlit as st
 import pandas as pd
+import requests
+import base64
+
+from io import StringIO
+from datetime import datetime
 
 # =====================================================
 # CONFIGURACIÓN DE PÁGINA
@@ -95,8 +100,6 @@ def verificar_usuario(legajo_ingresado):
         st.error(
             f"Error verificando usuario: {e}"
         )
-        st.write(df_usuarios.head())
-        st.write("Usuario ingresado:", legajo_limpio)
 
         return False
 
