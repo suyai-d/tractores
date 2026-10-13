@@ -20,14 +20,85 @@ st.set_page_config(
 # registrar_evento_github()
 # obtener_organizaciones()
 
-def verificar_usuario(usuario):
-    usuarios_demo = [
-        "X000001",
-        "X000002",
-        "X000003"
-    ]
+import requests
+import base64
+from io import StringIO
 
-    return usuario.upper() in usuarios_demo
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+
+REPO_OWNER = "suyai-d"
+REPO_NAME = "reportes-seguridad-db"
+
+
+def verificar_usuario(legajo_ingresado):
+
+    url_api_usuarios = (
+        f"https://api.github.com/repos/"
+        f"{REPO_OWNER}/{REPO_NAME}/contents/"
+        f"usuarios_permitidos.csv"
+    )
+
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    legajo_limpio = (
+        legajo_ingresado
+        .strip()
+        .upper()
+    )
+
+    try:
+
+        response = requests.get(
+            url_api_usuarios,
+            headers=headers,
+            timeout=10
+        )
+
+        if response.status_code == 200:
+
+            file_data = response.json()
+
+            content = base64.b64decode(
+                file_data["content"]
+            ).decode("utf-8")
+
+            df_usuarios = pd.read_csv(
+                StringIO(content)
+            )
+
+            df_usuarios["usuarios"] = (
+                df_usuarios["usuarios"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            return (
+                legajo_limpio
+                in df_usuarios["usuarios"].values
+            )
+
+        else:
+
+            st.error(
+                f"Error leyendo usuarios permitidos. "
+                f"Código: {response.status_code}"
+            )
+
+            return False
+
+    except Exception as e:
+
+        st.error(
+            f"Error verificando usuario: {e}"
+        )
+        st.write(df_usuarios.head())
+        st.write("Usuario ingresado:", legajo_limpio)
+
+        return False
 
 
 def registrar_evento_github(usuario, accion, cliente="N/A"):
