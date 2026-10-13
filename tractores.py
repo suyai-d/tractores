@@ -595,30 +595,6 @@ def leer_excel_tractores(archivo):
 
     return df.reset_index(drop=True)
 
-# =====================================================
-# FILTRO DE MAQUINAS EN EL SIDEBAR
-# =====================================================
-if df_tractores is not None:
-
-    lista_maquinas = sorted(
-        df_tractores["Máquina"]
-        .dropna()
-        .unique()
-        .tolist()
-    )
-
-    maquinas_seleccionadas = st.sidebar.multiselect(
-        "Tractores a analizar",
-        options=lista_maquinas,
-        default=lista_maquinas
-    )
-
-    df_tractores = df_tractores[
-        df_tractores["Máquina"].isin(
-            maquinas_seleccionadas
-        )
-    ]
-
 
 
 # =====================================================
@@ -1153,8 +1129,14 @@ st.title(
     "🚜 Informe de Utilización de Tractores"
 )
 
-fecha_inicio = "-"
-fecha_fin = "-"
+# fecha_inicio = "-"
+# fecha_fin = "-"
+#
+# if (
+#     df_tractores is not None
+#     and "Fecha de inicio" in df_tractores.columns
+# ):
+# ...
 
 if (
     df_tractores is not None
@@ -1176,6 +1158,31 @@ if (
         .max()
         .strftime("%d/%m/%Y")
     )
+
+# =====================================================
+# FILTRO DE MAQUINAS EN EL SIDEBAR
+# =====================================================
+
+if df_tractores is not None:
+
+    lista_maquinas = sorted(
+        df_tractores["Máquina"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    maquinas_seleccionadas = st.sidebar.multiselect(
+        "Tractores a analizar",
+        options=lista_maquinas,
+        default=lista_maquinas
+    )
+
+    df_tractores = df_tractores[
+        df_tractores["Máquina"].isin(
+            maquinas_seleccionadas
+        )
+    ]
 
 col_info1, col_info2 = st.columns(2)
 
