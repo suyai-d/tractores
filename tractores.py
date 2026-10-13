@@ -595,6 +595,31 @@ def leer_excel_tractores(archivo):
 
     return df.reset_index(drop=True)
 
+# =====================================================
+# FILTRO DE MAQUINAS EN EL SIDEBAR
+# =====================================================
+if df_tractores is not None:
+
+    lista_maquinas = sorted(
+        df_tractores["Máquina"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    maquinas_seleccionadas = st.sidebar.multiselect(
+        "Tractores a analizar",
+        options=lista_maquinas,
+        default=lista_maquinas
+    )
+
+    df_tractores = df_tractores[
+        df_tractores["Máquina"].isin(
+            maquinas_seleccionadas
+        )
+    ]
+
+
 
 # =====================================================
 # LECTURA DEL EXCEL DE MOTIVOS OCIOSOS
@@ -1128,17 +1153,56 @@ st.title(
     "🚜 Informe de Utilización de Tractores"
 )
 
-if cliente_valido:
-    st.info(
-        f"📋 Cliente: **{cliente}**"
+fecha_inicio = "-"
+fecha_fin = "-"
+
+if (
+    df_tractores is not None
+    and "Fecha de inicio" in df_tractores.columns
+):
+
+    fecha_inicio = (
+        pd.to_datetime(
+            df_tractores["Fecha de inicio"]
+        )
+        .min()
+        .strftime("%d/%m/%Y")
     )
 
-else:
-    st.warning(
-        "Seleccioná un cliente para confeccionar "
-        "el informe."
+    fecha_fin = (
+        pd.to_datetime(
+            df_tractores["Fecha de terminación"]
+        )
+        .max()
+        .strftime("%d/%m/%Y")
     )
 
+col_info1, col_info2 = st.columns(2)
+
+with col_info1:
+
+    st.subheader(
+        f"Cliente: {cliente}"
+    )
+
+with col_info2:
+
+    st.markdown(
+        f"""
+        <div style="
+        text-align:right;
+        font-size:18px;
+        font-weight:bold;
+        color:#367c2b;
+        ">
+        📅 Período:
+        {fecha_inicio} al {fecha_fin}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+st.markdown("---")
 
 # =====================================================
 # LECTURA DEL EXCEL CONSOLIDADO
@@ -1199,46 +1263,6 @@ if archivo_ociosos is not None:
             f"motivos ociosos: {e}"
         )
 
-
-# =====================================================
-# RESUMEN DE CARGA
-# =====================================================
-
-cantidad_tractores = (
-    len(df_tractores)
-    if df_tractores is not None
-    else 0
-)
-
-col_a, col_b, col_c = st.columns(3)
-
-with col_a:
-    st.metric(
-        "Tractores detectados",
-        cantidad_tractores,
-    )
-
-with col_b:
-    st.metric(
-        "Datos de tractores",
-        (
-            "Cargados"
-            if df_tractores is not None
-            else "Pendientes"
-        ),
-    )
-
-with col_c:
-    st.metric(
-        "Motivos ociosos",
-        (
-            "Cargados"
-            if df_ociosos is not None
-            else "Pendientes"
-        ),
-    )
-
-st.markdown("---")
 
 
 # =====================================================
