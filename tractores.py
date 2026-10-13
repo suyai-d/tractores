@@ -1129,61 +1129,6 @@ st.title(
     "🚜 Informe de Utilización de Tractores"
 )
 
-# fecha_inicio = "-"
-# fecha_fin = "-"
-#
-# if (
-#     df_tractores is not None
-#     and "Fecha de inicio" in df_tractores.columns
-# ):
-# ...
-
-if (
-    df_tractores is not None
-    and "Fecha de inicio" in df_tractores.columns
-):
-
-    fecha_inicio = (
-        pd.to_datetime(
-            df_tractores["Fecha de inicio"]
-        )
-        .min()
-        .strftime("%d/%m/%Y")
-    )
-
-    fecha_fin = (
-        pd.to_datetime(
-            df_tractores["Fecha de terminación"]
-        )
-        .max()
-        .strftime("%d/%m/%Y")
-    )
-
-# =====================================================
-# FILTRO DE MAQUINAS EN EL SIDEBAR
-# =====================================================
-
-if df_tractores is not None:
-
-    lista_maquinas = sorted(
-        df_tractores["Máquina"]
-        .dropna()
-        .unique()
-        .tolist()
-    )
-
-    maquinas_seleccionadas = st.sidebar.multiselect(
-        "Tractores a analizar",
-        options=lista_maquinas,
-        default=lista_maquinas
-    )
-
-    df_tractores = df_tractores[
-        df_tractores["Máquina"].isin(
-            maquinas_seleccionadas
-        )
-    ]
-
 col_info1, col_info2 = st.columns(2)
 
 with col_info1:
@@ -1220,6 +1165,7 @@ columnas_utilizacion = {}
 
 if archivo_tractores is not None:
     try:
+
         df_tractores = leer_excel_tractores(
             archivo_tractores
         )
@@ -1229,6 +1175,52 @@ if archivo_tractores is not None:
                 df_tractores
             )
         )
+
+        # -------------------------
+        # FILTRO DE MAQUINAS
+        # -------------------------
+
+        lista_maquinas = sorted(
+            df_tractores["Máquina"]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        maquinas_seleccionadas = st.sidebar.multiselect(
+            "Tractores a analizar",
+            options=lista_maquinas,
+            default=lista_maquinas
+        )
+
+        df_tractores = df_tractores[
+            df_tractores["Máquina"].isin(
+                maquinas_seleccionadas
+            )
+        ]
+
+        # -------------------------
+        # FECHAS
+        # -------------------------
+
+        fecha_inicio = (
+            pd.to_datetime(
+                df_tractores["Fecha de inicio"]
+            )
+            .min()
+            .strftime("%d/%m/%Y")
+        )
+
+        fecha_fin = (
+            pd.to_datetime(
+                df_tractores["Fecha de terminación"]
+            )
+            .max()
+            .strftime("%d/%m/%Y")
+        )
+
+    except Exception as e:
+        st.error(...)
 
         st.success(
             "Excel consolidado cargado correctamente. "
