@@ -1120,6 +1120,15 @@ archivo_ociosos = st.sidebar.file_uploader(
     key="excel_ociosos",
 )
 
+# =====================================================
+# VARIABLES POR DEFECTO
+# =====================================================
+
+fecha_inicio = "-"
+fecha_fin = "-"
+
+df_tractores = None
+columnas_utilizacion = {}
 
 # =====================================================
 # PORTADA
@@ -1133,9 +1142,17 @@ col_info1, col_info2 = st.columns(2)
 
 with col_info1:
 
-    st.subheader(
-        f"Cliente: {cliente}"
-    )
+    if cliente_valido:
+
+        st.subheader(
+            f"Cliente: {cliente}"
+        )
+
+    else:
+
+        st.subheader(
+            "Cliente: No seleccionado"
+        )
 
 with col_info2:
 
@@ -1160,10 +1177,8 @@ st.markdown("---")
 # LECTURA DEL EXCEL CONSOLIDADO
 # =====================================================
 
-df_tractores = None
-columnas_utilizacion = {}
-
 if archivo_tractores is not None:
+
     try:
 
         df_tractores = leer_excel_tractores(
@@ -1177,7 +1192,7 @@ if archivo_tractores is not None:
         )
 
         # -------------------------
-        # FILTRO DE MAQUINAS
+        # FILTRO DE MÁQUINAS
         # -------------------------
 
         lista_maquinas = sorted(
@@ -1203,38 +1218,40 @@ if archivo_tractores is not None:
         # FECHAS
         # -------------------------
 
-        fecha_inicio = (
-            pd.to_datetime(
-                df_tractores["Fecha de inicio"]
-            )
-            .min()
-            .strftime("%d/%m/%Y")
-        )
+        if (
+            len(df_tractores) > 0
+            and "Fecha de inicio" in df_tractores.columns
+            and "Fecha de terminación" in df_tractores.columns
+        ):
 
-        fecha_fin = (
-            pd.to_datetime(
-                df_tractores["Fecha de terminación"]
+            fecha_inicio = (
+                pd.to_datetime(
+                    df_tractores["Fecha de inicio"],
+                    errors="coerce"
+                )
+                .min()
+                .strftime("%d/%m/%Y")
             )
-            .max()
-            .strftime("%d/%m/%Y")
-        )
 
-    except Exception as e:
-        st.error(...)
+            fecha_fin = (
+                pd.to_datetime(
+                    df_tractores["Fecha de terminación"],
+                    errors="coerce"
+                )
+                .max()
+                .strftime("%d/%m/%Y")
+            )
 
         st.success(
-            "Excel consolidado cargado correctamente. "
-            f"Tractores detectados: "
-            f"{len(df_tractores)}."
+            f"Excel consolidado cargado correctamente. "
+            f"Tractores detectados: {len(df_tractores)}"
         )
 
     except Exception as e:
+
         st.error(
-            "Error leyendo el Excel consolidado "
-            f"de tractores: {e}"
+            f"Error leyendo el Excel consolidado: {e}"
         )
-
-
 # =====================================================
 # LECTURA DEL EXCEL DE MOTIVOS OCIOSOS
 # =====================================================
