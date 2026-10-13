@@ -102,20 +102,135 @@ def verificar_usuario(legajo_ingresado):
 
 
 def registrar_evento_github(usuario, accion, cliente="N/A"):
-    """
-    Reemplazar por tu función actual de GitHub.
-    """
-    pass
+
+    url_registro = (
+        f"https://api.github.com/repos/"
+        f"{REPO_OWNER}/{REPO_NAME}/contents/"
+        f"registro_actividad.csv"
+    )
+
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    nueva_fila = {
+        "fecha_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "usuario": usuario.upper(),
+        "accion": accion,
+        "cliente": cliente
+    }
+
+    try:
+
+        res = requests.get(
+            url_registro,
+            headers=headers
+        )
+
+        if res.status_code == 200:
+
+            file_data = res.json()
+
+            sha = file_data["sha"]
+
+            contenido = base64.b64decode(
+                file_data["content"]
+            ).decode("utf-8")
+
+            df_log = pd.read_csv(
+                StringIO(contenido)
+            )
+
+            df_log = pd.concat(
+                [
+                    df_log,
+                    pd.DataFrame([nueva_fila])
+                ],
+                ignore_index=True
+            )
+
+            csv_actualizado = df_log.to_csv(
+                index=False
+            )
+
+            payload = {
+                "message": f"Log {usuario} - {accion}",
+                "content": base64.b64encode(
+                    csv_actualizado.encode("utf-8")
+                ).decode("utf-8"),
+                "branch": "main",
+                "sha": sha
+            }
+
+            requests.put(
+                url_registro,
+                json=payload,
+                headers=headers
+            )
+
+    except Exception as e:
+
+        st.error(
+            f"Error registrando actividad: {e}"
+        )
 
 
 def obtener_organizaciones():
 
-    return [
-        "H&H Outfitters SA",
-        "La Florida",
-        "Los Grobo",
-        "El Algarrobo"
-    ]
+    url_api_orgs = (
+        f"https://api.github.com/repos/"
+        f"{REPO_OWNER}/{REPO_NAME}/contents/"
+        f"Orgs%20CONCI.csv"
+    )
+
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    try:
+
+        response = requests.get(
+            url_api_orgs,
+            headers=headers
+        )
+
+        if response.status_code == 200:
+
+            file_data = response.json()
+
+            contenido = base64.b64decode(
+                file_data["content"]
+            ).decode("utf-8")
+
+            df_orgs = pd.read_csv(
+                StringIO(contenido)
+            )
+
+            return sorted(
+                df_orgs["Organización"]
+                .dropna()
+                .unique()
+                .tolist()
+            )
+
+        else:
+
+            st.error(
+                f"Error leyendo Orgs CONCI.csv "
+                f"({response.status_code})"
+            )
+
+            return []
+
+    except Exception as e:
+
+        st.error(
+            f"Error cargando organizaciones: {e}"
+        )
+
+        return []
 
 
 # =====================================================
