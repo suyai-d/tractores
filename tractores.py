@@ -14,7 +14,7 @@ from datetime import datetime
 st.set_page_config(
     page_title="Reporte de Tractores",
     page_icon="🚜",
-    layout="wide"
+    layout="wide",
 )
 
 
@@ -36,16 +36,19 @@ BRANCH = "main"
 CLIENTE_VACIO = "Seleccionar Cliente..."
 
 COLUMNAS_TECNOLOGIAS = {
-    "AutoTrac": "AutoTrac™",
-    "AutoPath": "AutoPath™",
-    "Implement Guidance": "AutoTrac™ Implement Guidance",
-    "AutoTrac Turn Automation": "AutoTrac™ Turn Automation",
-    "Efficiency Manager": "Tiempo de activación de Efficiency Manager™",
-    "FieldCruise": "FieldCruise™",
+    "AutoTrac": "AutoTrac™ Activo",
+    "AutoPath": "AutoPath™ Activo",
+    "Implement Guidance": (
+        "Guiado pasivo de implemento AutoTrac™ Activo"
+    ),
+    "AutoTrac Turn Automation": (
+        "Automatización de maniobras AutoTrac™ Activo"
+    ),
+    "Efficiency Manager": (
+        "Tiempo de activación de Efficiency Manager™ Automático"
+    ),
+    "FieldCruise": "FieldCruise™ Activado",
 }
-
-# Estas columnas no representan una razón concreta declarada
-# por el operador, por eso no participan como motivo registrado.
 
 MOTIVOS_EXCLUIDOS = {
     "Sin definir Período",
@@ -67,13 +70,46 @@ def normalizar_texto(valor):
     if pd.isna(valor):
         return ""
 
-    return " ".join(str(valor).strip().split())
+    return " ".join(
+        str(valor).strip().split()
+    )
 
 
-def convertir_numerico(serie):
+def convertir_valor_numerico(valor):
     """
-    Convierte una serie a valores numéricos.
-    Admite números con coma o punto decimal.
+    Convierte un único valor a número.
+
+    Admite:
+    - números;
+    - porcentajes;
+    - coma decimal;
+    - celdas vacías.
+    """
+
+    if pd.isna(valor):
+        return 0.0
+
+    texto = (
+        str(valor)
+        .replace("%", "")
+        .replace(",", ".")
+        .strip()
+    )
+
+    numero = pd.to_numeric(
+        texto,
+        errors="coerce",
+    )
+
+    if pd.isna(numero):
+        return 0.0
+
+    return float(numero)
+
+
+def convertir_serie_numerica(serie):
+    """
+    Convierte una serie completa a valores numéricos.
     """
 
     return pd.to_numeric(
@@ -90,15 +126,18 @@ def limitar_porcentaje(valor):
     Limita cualquier porcentaje al rango 0-100.
     """
 
-    try:
-        valor = float(valor)
-    except (TypeError, ValueError):
-        return 0.0
+    valor = convertir_valor_numerico(valor)
 
-    return max(0.0, min(valor, 100.0))
+    return max(
+        0.0,
+        min(valor, 100.0),
+    )
 
 
-def obtener_primera_columna(df, nombres_posibles):
+def obtener_primera_columna(
+    df,
+    nombres_posibles,
+):
     """
     Devuelve el primer nombre de columna disponible
     entre las alternativas indicadas.
@@ -132,7 +171,9 @@ def verificar_usuario(legajo_ingresado):
         "Accept": "application/vnd.github.v3+json",
     }
 
-    legajo_limpio = normalizar_texto(legajo_ingresado).upper()
+    legajo_limpio = normalizar_texto(
+        legajo_ingresado
+    ).upper()
 
     if not legajo_limpio:
         return False
@@ -146,7 +187,8 @@ def verificar_usuario(legajo_ingresado):
 
         if response.status_code != 200:
             st.error(
-                "No se pudo leer el listado de usuarios autorizados. "
+                "No se pudo leer el listado de usuarios "
+                "autorizados. "
                 f"Código de GitHub: {response.status_code}"
             )
             return False
@@ -177,16 +219,24 @@ def verificar_usuario(legajo_ingresado):
         usuarios_autorizados = (
             df_usuarios["usuarios"]
             .astype(str)
-            .str.replace(r"\r|\n", "", regex=True)
+            .str.replace(
+                r"\r|\n",
+                "",
+                regex=True,
+            )
             .str.strip()
             .str.upper()
         )
 
-        return legajo_limpio in usuarios_autorizados.values
+        return (
+            legajo_limpio
+            in usuarios_autorizados.values
+        )
 
     except requests.exceptions.Timeout:
         st.error(
-            "GitHub tardó demasiado en responder al validar el usuario."
+            "GitHub tardó demasiado en responder "
+            "al validar el usuario."
         )
         return False
 
@@ -216,8 +266,8 @@ def registrar_evento_github(
     """
     Agrega un evento a registro_actividad.csv.
 
-    Incluye un reintento si GitHub devuelve conflicto de SHA
-    por una escritura simultánea.
+    Incluye un reintento si GitHub devuelve
+    un conflicto de SHA.
     """
 
     url_registro = (
@@ -235,8 +285,12 @@ def registrar_evento_github(
         "fecha_hora": datetime.now().strftime(
             "%Y-%m-%d %H:%M:%S"
         ),
-        "usuario": normalizar_texto(usuario).upper(),
-        "accion": normalizar_texto(accion),
+        "usuario": normalizar_texto(
+            usuario
+        ).upper(),
+        "accion": normalizar_texto(
+            accion
+        ),
         "cliente": (
             normalizar_texto(cliente)
             if cliente
@@ -254,7 +308,8 @@ def registrar_evento_github(
 
             if respuesta_get.status_code != 200:
                 st.error(
-                    "No se pudo leer registro_actividad.csv. "
+                    "No se pudo leer "
+                    "registro_actividad.csv. "
                     f"Código de GitHub: "
                     f"{respuesta_get.status_code}"
                 )
@@ -271,6 +326,7 @@ def registrar_evento_github(
                 df_log = pd.read_csv(
                     StringIO(contenido)
                 )
+
             except pd.errors.EmptyDataError:
                 df_log = pd.DataFrame(
                     columns=[
@@ -306,9 +362,11 @@ def registrar_evento_github(
                 index=False
             )
 
-            contenido_codificado = base64.b64encode(
-                csv_actualizado.encode("utf-8")
-            ).decode("utf-8")
+            contenido_codificado = (
+                base64.b64encode(
+                    csv_actualizado.encode("utf-8")
+                ).decode("utf-8")
+            )
 
             payload = {
                 "message": (
@@ -327,7 +385,10 @@ def registrar_evento_github(
                 timeout=10,
             )
 
-            if respuesta_put.status_code in [200, 201]:
+            if respuesta_put.status_code in [
+                200,
+                201,
+            ]:
                 return True
 
             if (
@@ -337,10 +398,12 @@ def registrar_evento_github(
                 continue
 
             st.error(
-                "No se pudo guardar el evento en GitHub. "
+                "No se pudo guardar el evento "
+                "en GitHub. "
                 f"Código: {respuesta_put.status_code}. "
                 f"Detalle: {respuesta_put.text[:300]}"
             )
+
             return False
 
         except requests.exceptions.Timeout:
@@ -373,7 +436,8 @@ def registrar_evento_github(
 @st.cache_data(ttl=300)
 def obtener_organizaciones():
     """
-    Obtiene el listado de clientes desde Orgs CONCI.csv.
+    Obtiene el listado de clientes desde
+    Orgs CONCI.csv.
     """
 
     url_api_orgs = (
@@ -447,82 +511,94 @@ def obtener_organizaciones():
 
 
 # =====================================================
-# LECTURA DE ARCHIVOS
+# LECTURA DEL EXCEL CONSOLIDADO DE TRACTORES
 # =====================================================
 
-def leer_csv_tractor(archivo):
+def leer_excel_tractores(archivo):
     """
-    Lee un CSV de tractor tratando de soportar
-    distintas codificaciones.
+    Lee el Excel consolidado del Analizador de Máquina.
+
+    El archivo debe contener una fila por tractor.
     """
 
-    ultimo_error = None
+    archivo.seek(0)
 
-    for encoding in ["utf-8-sig", "utf-8", "latin-1"]:
-        try:
-            archivo.seek(0)
-
-            df = pd.read_csv(
-                archivo,
-                encoding=encoding,
-            )
-
-            df.columns = (
-                df.columns
-                .astype(str)
-                .str.strip()
-            )
-
-            columnas_obligatorias = {
-                "Número de serie de la máquina",
-                "Alías",
-                "Categoría",
-                "Serie",
-                "Valor",
-            }
-
-            faltantes = columnas_obligatorias.difference(
-                df.columns
-            )
-
-            if faltantes:
-                raise ValueError(
-                    "Faltan las siguientes columnas: "
-                    + ", ".join(sorted(faltantes))
-                )
-
-            df["Categoría"] = (
-                df["Categoría"]
-                .astype(str)
-                .apply(normalizar_texto)
-            )
-
-            df["Serie"] = (
-                df["Serie"]
-                .astype(str)
-                .apply(normalizar_texto)
-            )
-
-            df["Valor"] = convertir_numerico(
-                df["Valor"]
-            ).fillna(0)
-
-            df["Número de serie de la máquina"] = (
-                df["Número de serie de la máquina"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-            )
-
-            return df
-
-        except Exception as e:
-            ultimo_error = e
-
-    raise ValueError(
-        f"No se pudo leer el CSV. {ultimo_error}"
+    df = pd.read_excel(
+        archivo,
+        sheet_name=0,
+        engine="openpyxl",
     )
 
+    df.columns = [
+        normalizar_texto(columna)
+        for columna in df.columns
+    ]
+
+    columnas_obligatorias = [
+        "Máquina",
+        "Modelo",
+        "Número de serie de la máquina",
+    ]
+
+    faltantes = [
+        columna
+        for columna in columnas_obligatorias
+        if columna not in df.columns
+    ]
+
+    if faltantes:
+        raise ValueError(
+            "Faltan columnas obligatorias: "
+            + ", ".join(faltantes)
+        )
+
+    df = df.dropna(
+        subset=[
+            "Número de serie de la máquina"
+        ]
+    ).copy()
+
+    df["Número de serie de la máquina"] = (
+        df["Número de serie de la máquina"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    df["Máquina"] = (
+        df["Máquina"]
+        .astype(str)
+        .str.strip()
+    )
+
+    df["Modelo"] = (
+        df["Modelo"]
+        .astype(str)
+        .str.strip()
+    )
+
+    if "Tipo" in df.columns:
+        df = df[
+            df["Tipo"]
+            .astype(str)
+            .str.strip()
+            .str.casefold()
+            .eq("tractor")
+        ].copy()
+
+    df = df.drop_duplicates(
+        subset=[
+            "Número de serie de la máquina"
+        ],
+        keep="first",
+    )
+
+    return df.reset_index(drop=True)
+
+
+# =====================================================
+# LECTURA DEL EXCEL DE MOTIVOS OCIOSOS
+# =====================================================
 
 def leer_excel_ociosos(archivo):
     """
@@ -568,234 +644,68 @@ def leer_excel_ociosos(archivo):
 
 
 # =====================================================
-# IDENTIFICACIÓN DE TRACTORES
+# COLUMNAS DE UTILIZACIÓN
 # =====================================================
 
-def obtener_identificacion_tractor(df, numero_orden):
+def obtener_columnas_utilizacion(df):
     """
-    Obtiene alias y número de serie desde el CSV.
-    """
+    Identifica las columnas de porcentaje y horas.
 
-    alias = f"Tractor {numero_orden}"
-    numero_serie = ""
-
-    if (
-        "Alías" in df.columns
-        and df["Alías"].notna().any()
-    ):
-        alias_detectado = normalizar_texto(
-            df["Alías"].dropna().iloc[0]
-        )
-
-        if alias_detectado:
-            alias = alias_detectado
-
-    if (
-        "Número de serie de la máquina" in df.columns
-        and df["Número de serie de la máquina"]
-        .notna()
-        .any()
-    ):
-        numero_serie = normalizar_texto(
-            df["Número de serie de la máquina"]
-            .dropna()
-            .iloc[0]
-        ).upper()
-
-    return alias, numero_serie
-
-
-# =====================================================
-# CÁLCULO DE TECNOLOGÍAS
-# =====================================================
-
-def obtener_porcentaje_tecnologia(
-    df,
-    nombre_categoria,
-    series_activas=None,
-    series_inactivas=None,
-):
-    """
-    Calcula el porcentaje de utilización de una tecnología:
-
-    horas activas / (horas activas + horas inactivas) * 100
-    """
-
-    if series_activas is None:
-        series_activas = ["ENC", "AUTO"]
-
-    if series_inactivas is None:
-        series_inactivas = ["APAG", "MANUAL"]
-
-    categoria_buscada = normalizar_texto(
-        nombre_categoria
-    ).casefold()
-
-    categorias_normalizadas = (
-        df["Categoría"]
-        .astype(str)
-        .apply(normalizar_texto)
-        .str.casefold()
-    )
-
-    df_categoria = df[
-        categorias_normalizadas == categoria_buscada
-    ].copy()
-
-    if df_categoria.empty:
-        return 0.0
-
-    df_categoria["Serie_Normalizada"] = (
-        df_categoria["Serie"]
-        .astype(str)
-        .apply(normalizar_texto)
-        .str.upper()
-    )
-
-    df_categoria["Valor"] = convertir_numerico(
-        df_categoria["Valor"]
-    ).fillna(0)
-
-    activas = {
-        normalizar_texto(valor).upper()
-        for valor in series_activas
-    }
-
-    inactivas = {
-        normalizar_texto(valor).upper()
-        for valor in series_inactivas
-    }
-
-    horas_activas = df_categoria.loc[
-        df_categoria["Serie_Normalizada"].isin(
-            activas
-        ),
-        "Valor",
-    ].sum()
-
-    horas_inactivas = df_categoria.loc[
-        df_categoria["Serie_Normalizada"].isin(
-            inactivas
-        ),
-        "Valor",
-    ].sum()
-
-    horas_totales = (
-        horas_activas
-        + horas_inactivas
-    )
-
-    if horas_totales <= 0:
-        return 0.0
-
-    porcentaje = (
-        horas_activas
-        / horas_totales
-    ) * 100
-
-    return round(
-        limitar_porcentaje(porcentaje),
-        1,
-    )
-
-
-def obtener_porcentajes_tecnologias(df):
-    """
-    Calcula los seis porcentajes tecnológicos.
+    Pandas agrega .1 a los encabezados duplicados.
     """
 
     return {
-        "AutoTrac": obtener_porcentaje_tecnologia(
+        "trabajo_pct": obtener_primera_columna(
             df,
-            COLUMNAS_TECNOLOGIAS["AutoTrac"],
-            series_activas=["Enc"],
-            series_inactivas=["Apag"],
-        ),
-
-        "AutoPath": obtener_porcentaje_tecnologia(
-            df,
-            COLUMNAS_TECNOLOGIAS["AutoPath"],
-            series_activas=["Enc"],
-            series_inactivas=["Apag"],
-        ),
-
-        "Implement Guidance": obtener_porcentaje_tecnologia(
-            df,
-            COLUMNAS_TECNOLOGIAS["Implement Guidance"],
-            series_activas=["Enc"],
-            series_inactivas=["Apag"],
-        ),
-
-        "AutoTrac Turn Automation": obtener_porcentaje_tecnologia(
-            df,
-            COLUMNAS_TECNOLOGIAS[
-                "AutoTrac Turn Automation"
+            [
+                "Utilización Trabajo",
+                "Utilizacion Trabajo",
             ],
-            series_activas=["Enc"],
-            series_inactivas=["Apag"],
         ),
 
-        "Efficiency Manager": obtener_porcentaje_tecnologia(
+        "trabajo_horas": obtener_primera_columna(
             df,
-            COLUMNAS_TECNOLOGIAS["Efficiency Manager"],
-            series_activas=["Auto"],
-            series_inactivas=["Manual"],
+            [
+                "Utilización Trabajo.1",
+                "Utilizacion Trabajo.1",
+                "Utilización Trabajo horas",
+            ],
         ),
 
-        "FieldCruise": obtener_porcentaje_tecnologia(
+        "ralenti_pct": obtener_primera_columna(
             df,
-            COLUMNAS_TECNOLOGIAS["FieldCruise"],
-            series_activas=["Enc"],
-            series_inactivas=["Apag"],
+            [
+                "Utilización Ralentí",
+                "Utilizacion Ralenti",
+            ],
+        ),
+
+        "ralenti_horas": obtener_primera_columna(
+            df,
+            [
+                "Utilización Ralentí.1",
+                "Utilizacion Ralenti.1",
+                "Utilización Ralentí horas",
+            ],
+        ),
+
+        "transporte_pct": obtener_primera_columna(
+            df,
+            [
+                "Utilización Transporte",
+                "Utilizacion Transporte",
+            ],
+        ),
+
+        "transporte_horas": obtener_primera_columna(
+            df,
+            [
+                "Utilización Transporte.1",
+                "Utilizacion Transporte.1",
+                "Utilización Transporte horas",
+            ],
         ),
     }
-
-
-# =====================================================
-# HORAS EN REPOSO DEL CSV
-# =====================================================
-
-def obtener_horas_reposo(df):
-    """
-    Obtiene las horas totales en reposo desde la categoría
-    'Utilización de la máquina'.
-    """
-
-    categorias = (
-        df["Categoría"]
-        .astype(str)
-        .apply(normalizar_texto)
-        .str.casefold()
-    )
-
-    series = (
-        df["Serie"]
-        .astype(str)
-        .apply(normalizar_texto)
-        .str.casefold()
-    )
-
-    mascara = (
-        categorias.eq(
-            "Utilización de la máquina".casefold()
-        )
-        & series.isin(
-            [
-                "En reposo".casefold(),
-                "Ralentí".casefold(),
-                "Ralenti".casefold(),
-            ]
-        )
-    )
-
-    horas_reposo = convertir_numerico(
-        df.loc[mascara, "Valor"]
-    ).fillna(0).sum()
-
-    return round(
-        max(float(horas_reposo), 0.0),
-        2,
-    )
 
 
 # =====================================================
@@ -804,14 +714,16 @@ def obtener_horas_reposo(df):
 
 def identificar_columnas_motivos(df_ociosos):
     """
-    Identifica las columnas de motivos que terminan en Período,
-    excluyendo estados que no representan una razón concreta.
+    Identifica las columnas que representan
+    motivos ociosos registrados.
     """
 
     columnas = []
 
     for columna in df_ociosos.columns:
-        nombre = normalizar_texto(columna)
+        nombre = normalizar_texto(
+            columna
+        )
 
         if not nombre.endswith("Período"):
             continue
@@ -828,13 +740,13 @@ def calcular_motivos_ociosos(
     df_ociosos,
     columna_serie_ociosos,
     numero_serie,
-    horas_reposo,
+    horas_ralenti,
 ):
     """
     Calcula:
     - horas con motivos registrados;
-    - porcentaje de cobertura sobre el reposo total;
-    - detalle de motivos de mayor a menor.
+    - porcentaje sobre el ralentí total;
+    - detalle ordenado de motivos.
     """
 
     resultado_vacio = {
@@ -871,27 +783,28 @@ def calcular_motivos_ociosos(
     if filas_tractor.empty:
         return resultado_vacio
 
-    columnas_motivos = identificar_columnas_motivos(
-        df_ociosos
+    columnas_motivos = (
+        identificar_columnas_motivos(
+            df_ociosos
+        )
     )
 
     motivos = []
 
     for columna in columnas_motivos:
-        valores = pd.to_numeric(
+        valores = convertir_serie_numerica(
             filas_tractor[columna]
-            .astype(str)
-            .str.replace(",", ".", regex=False)
-            .str.strip(),
-            errors="coerce",
         ).fillna(0)
 
-        horas = float(valores.sum())
+        horas = float(
+            valores.sum()
+        )
 
         if horas > 0:
-            motivo_limpio = normalizar_texto(
-                columna
-            ).replace(" Período", "")
+            motivo_limpio = (
+                normalizar_texto(columna)
+                .replace(" Período", "")
+            )
 
             motivos.append(
                 {
@@ -906,7 +819,9 @@ def calcular_motivos_ociosos(
             "encontrado": True,
         }
 
-    df_detalle = pd.DataFrame(motivos)
+    df_detalle = pd.DataFrame(
+        motivos
+    )
 
     df_detalle = (
         df_detalle.groupby(
@@ -925,11 +840,12 @@ def calcular_motivos_ociosos(
         df_detalle["Horas"].sum()
     )
 
-    if horas_reposo > 0:
+    if horas_ralenti > 0:
         porcentaje = (
             horas_registradas
-            / horas_reposo
-        ) * 100
+            / horas_ralenti
+            * 100
+        )
     else:
         porcentaje = 0.0
 
@@ -969,23 +885,38 @@ def calcular_motivos_ociosos(
 # =====================================================
 
 def calcular_puntaje_tractor(
-    df_tractor,
+    fila,
     porcentaje_motivos_ociosos,
 ):
     """
     Calcula el promedio simple de los siete componentes.
     """
 
-    tecnologias = obtener_porcentajes_tecnologias(
-        df_tractor
-    )
+    componentes = {}
 
-    componentes = {
-        **tecnologias,
-        "Motivos ociosos": limitar_porcentaje(
+    for (
+        nombre_visible,
+        columna_excel,
+    ) in COLUMNAS_TECNOLOGIAS.items():
+
+        if columna_excel in fila.index:
+            valor = limitar_porcentaje(
+                fila[columna_excel]
+            )
+        else:
+            valor = 0.0
+
+        componentes[nombre_visible] = round(
+            valor,
+            1,
+        )
+
+    componentes["Motivos ociosos"] = round(
+        limitar_porcentaje(
             porcentaje_motivos_ociosos
         ),
-    }
+        1,
+    )
 
     puntaje_total = (
         sum(componentes.values())
@@ -1065,9 +996,9 @@ if not st.session_state.autenticado:
         use_container_width=True,
     ):
         if verificar_usuario(legajo):
-            usuario_limpio = (
-                normalizar_texto(legajo).upper()
-            )
+            usuario_limpio = normalizar_texto(
+                legajo
+            ).upper()
 
             registro_correcto = (
                 registrar_evento_github(
@@ -1081,6 +1012,7 @@ if not st.session_state.autenticado:
                 st.session_state.usuario = (
                     usuario_limpio
                 )
+
                 st.rerun()
 
         else:
@@ -1153,44 +1085,22 @@ st.sidebar.markdown("---")
 
 
 # =====================================================
-# CANTIDAD DE TRACTORES
-# =====================================================
-
-cantidad_tractores = st.sidebar.number_input(
-    "Cantidad de tractores",
-    min_value=1,
-    max_value=20,
-    value=1,
-    step=1,
-)
-
-cantidad_tractores = int(
-    cantidad_tractores
-)
-
-st.sidebar.markdown("---")
-
-
-# =====================================================
-# CARGA DE CSV DE TRACTORES
+# CARGA DEL EXCEL CONSOLIDADO
 # =====================================================
 
 st.sidebar.subheader(
-    "Archivos de Tractores"
+    "Datos de los Tractores"
 )
 
-archivos_tractores = []
-
-for i in range(cantidad_tractores):
-    archivo = st.sidebar.file_uploader(
-        f"CSV Tractor {i + 1}",
-        type=["csv"],
-        key=f"tractor_{i}",
-    )
-
-    archivos_tractores.append(
-        archivo
-    )
+archivo_tractores = st.sidebar.file_uploader(
+    "Excel consolidado de tractores",
+    type=["xlsx"],
+    key="excel_tractores",
+    help=(
+        "Cargá el archivo del Analizador de Máquina "
+        "con todos los tractores que querés analizar."
+    ),
+)
 
 st.sidebar.markdown("---")
 
@@ -1206,7 +1116,7 @@ st.sidebar.subheader(
 archivo_ociosos = st.sidebar.file_uploader(
     "Excel de motivos ociosos",
     type=["xlsx"],
-    key="ociosos",
+    key="excel_ociosos",
 )
 
 
@@ -1222,6 +1132,7 @@ if cliente_valido:
     st.info(
         f"📋 Cliente: **{cliente}**"
     )
+
 else:
     st.warning(
         "Seleccioná un cliente para confeccionar "
@@ -1230,87 +1141,39 @@ else:
 
 
 # =====================================================
-# RESUMEN DE CARGA
+# LECTURA DEL EXCEL CONSOLIDADO
 # =====================================================
 
-cantidad_csv_cargados = sum(
-    archivo is not None
-    for archivo in archivos_tractores
-)
+df_tractores = None
+columnas_utilizacion = {}
 
-col_a, col_b, col_c = st.columns(3)
-
-with col_a:
-    st.metric(
-        "Tractores a analizar",
-        cantidad_tractores,
-    )
-
-with col_b:
-    st.metric(
-        "CSV cargados",
-        (
-            f"{cantidad_csv_cargados}/"
-            f"{cantidad_tractores}"
-        ),
-    )
-
-with col_c:
-    st.metric(
-        "Motivos ociosos",
-        (
-            "Cargado"
-            if archivo_ociosos is not None
-            else "Pendiente"
-        ),
-    )
-
-st.markdown("---")
-
-
-# =====================================================
-# LECTURA DE LOS CSV
-# =====================================================
-
-tractores = []
-
-for indice, archivo in enumerate(
-    archivos_tractores,
-    start=1,
-):
-    if archivo is None:
-        continue
-
+if archivo_tractores is not None:
     try:
-        df_tractor = leer_csv_tractor(
-            archivo
+        df_tractores = leer_excel_tractores(
+            archivo_tractores
         )
 
-        alias, numero_serie = (
-            obtener_identificacion_tractor(
-                df_tractor,
-                indice,
+        columnas_utilizacion = (
+            obtener_columnas_utilizacion(
+                df_tractores
             )
         )
 
-        tractores.append(
-            {
-                "orden": indice,
-                "archivo": archivo.name,
-                "alias": alias,
-                "numero_serie": numero_serie,
-                "df": df_tractor,
-            }
+        st.success(
+            "Excel consolidado cargado correctamente. "
+            f"Tractores detectados: "
+            f"{len(df_tractores)}."
         )
 
     except Exception as e:
         st.error(
-            f"Error leyendo {archivo.name}: {e}"
+            "Error leyendo el Excel consolidado "
+            f"de tractores: {e}"
         )
 
 
 # =====================================================
-# LECTURA DEL EXCEL DE OCIOSIDAD
+# LECTURA DEL EXCEL DE MOTIVOS OCIOSOS
 # =====================================================
 
 df_ociosos = None
@@ -1326,15 +1189,56 @@ if archivo_ociosos is not None:
         )
 
         st.success(
-            "Archivo de motivos ociosos "
+            "Excel de motivos ociosos "
             "cargado correctamente."
         )
 
     except Exception as e:
         st.error(
-            "Error leyendo el archivo de "
+            "Error leyendo el Excel de "
             f"motivos ociosos: {e}"
         )
+
+
+# =====================================================
+# RESUMEN DE CARGA
+# =====================================================
+
+cantidad_tractores = (
+    len(df_tractores)
+    if df_tractores is not None
+    else 0
+)
+
+col_a, col_b, col_c = st.columns(3)
+
+with col_a:
+    st.metric(
+        "Tractores detectados",
+        cantidad_tractores,
+    )
+
+with col_b:
+    st.metric(
+        "Datos de tractores",
+        (
+            "Cargados"
+            if df_tractores is not None
+            else "Pendientes"
+        ),
+    )
+
+with col_c:
+    st.metric(
+        "Motivos ociosos",
+        (
+            "Cargados"
+            if df_ociosos is not None
+            else "Pendientes"
+        ),
+    )
+
+st.markdown("---")
 
 
 # =====================================================
@@ -1344,50 +1248,184 @@ if archivo_ociosos is not None:
 resultados_ranking = []
 resultados_detallados = []
 
-if tractores:
-    for tractor in tractores:
-        df_tractor = tractor["df"]
+if df_tractores is not None:
 
-        horas_reposo = obtener_horas_reposo(
-            df_tractor
+    columna_trabajo_pct = (
+        columnas_utilizacion.get(
+            "trabajo_pct"
+        )
+    )
+
+    columna_trabajo_horas = (
+        columnas_utilizacion.get(
+            "trabajo_horas"
+        )
+    )
+
+    columna_ralenti_pct = (
+        columnas_utilizacion.get(
+            "ralenti_pct"
+        )
+    )
+
+    columna_ralenti_horas = (
+        columnas_utilizacion.get(
+            "ralenti_horas"
+        )
+    )
+
+    columna_transporte_pct = (
+        columnas_utilizacion.get(
+            "transporte_pct"
+        )
+    )
+
+    columna_transporte_horas = (
+        columnas_utilizacion.get(
+            "transporte_horas"
+        )
+    )
+
+    for indice, fila in df_tractores.iterrows():
+
+        tractor = normalizar_texto(
+            fila.get(
+                "Máquina",
+                f"Tractor {indice + 1}",
+            )
         )
 
-        resultado_ociosos = (
-            calcular_motivos_ociosos(
-                df_ociosos=df_ociosos,
-                columna_serie_ociosos=(
-                    columna_serie_ociosos
-                ),
-                numero_serie=tractor[
-                    "numero_serie"
-                ],
-                horas_reposo=horas_reposo,
+        modelo = normalizar_texto(
+            fila.get(
+                "Modelo",
+                "",
             )
-            if (
-                df_ociosos is not None
-                and columna_serie_ociosos is not None
+        )
+
+        numero_serie = normalizar_texto(
+            fila.get(
+                "Número de serie de la máquina",
+                "",
             )
-            else {
+        ).upper()
+
+        trabajo_pct = (
+            limitar_porcentaje(
+                fila.get(
+                    columna_trabajo_pct,
+                    0,
+                )
+            )
+            if columna_trabajo_pct
+            else 0.0
+        )
+
+        trabajo_horas = (
+            convertir_valor_numerico(
+                fila.get(
+                    columna_trabajo_horas,
+                    0,
+                )
+            )
+            if columna_trabajo_horas
+            else 0.0
+        )
+
+        ralenti_pct = (
+            limitar_porcentaje(
+                fila.get(
+                    columna_ralenti_pct,
+                    0,
+                )
+            )
+            if columna_ralenti_pct
+            else 0.0
+        )
+
+        ralenti_horas = (
+            convertir_valor_numerico(
+                fila.get(
+                    columna_ralenti_horas,
+                    0,
+                )
+            )
+            if columna_ralenti_horas
+            else 0.0
+        )
+
+        transporte_pct = (
+            limitar_porcentaje(
+                fila.get(
+                    columna_transporte_pct,
+                    0,
+                )
+            )
+            if columna_transporte_pct
+            else 0.0
+        )
+
+        transporte_horas = (
+            convertir_valor_numerico(
+                fila.get(
+                    columna_transporte_horas,
+                    0,
+                )
+            )
+            if columna_transporte_horas
+            else 0.0
+        )
+
+        if (
+            df_ociosos is not None
+            and columna_serie_ociosos is not None
+        ):
+            resultado_ociosos = (
+                calcular_motivos_ociosos(
+                    df_ociosos=df_ociosos,
+                    columna_serie_ociosos=(
+                        columna_serie_ociosos
+                    ),
+                    numero_serie=numero_serie,
+                    horas_ralenti=ralenti_horas,
+                )
+            )
+
+        else:
+            resultado_ociosos = {
                 "horas_registradas": 0.0,
                 "porcentaje": 0.0,
                 "detalle": pd.DataFrame(),
                 "encontrado": False,
             }
-        )
 
         resultado_puntaje = (
             calcular_puntaje_tractor(
-                df_tractor,
-                resultado_ociosos["porcentaje"],
+                fila=fila,
+                porcentaje_motivos_ociosos=(
+                    resultado_ociosos[
+                        "porcentaje"
+                    ]
+                ),
             )
         )
 
         fila_ranking = {
-            "Tractor": tractor["alias"],
-            "Número de serie": tractor[
-                "numero_serie"
-            ],
+            "Tractor": tractor,
+            "Modelo": modelo,
+            "Número de serie": numero_serie,
             **resultado_puntaje,
+            "Trabajo (%)": round(
+                trabajo_pct,
+                1,
+            ),
+            "Ralentí (%)": round(
+                ralenti_pct,
+                1,
+            ),
+            "Transporte (%)": round(
+                transporte_pct,
+                1,
+            ),
         }
 
         resultados_ranking.append(
@@ -1396,8 +1434,16 @@ if tractores:
 
         resultados_detallados.append(
             {
-                **tractor,
-                "horas_reposo": horas_reposo,
+                "orden": indice + 1,
+                "tractor": tractor,
+                "modelo": modelo,
+                "numero_serie": numero_serie,
+                "trabajo_pct": trabajo_pct,
+                "trabajo_horas": trabajo_horas,
+                "ralenti_pct": ralenti_pct,
+                "ralenti_horas": ralenti_horas,
+                "transporte_pct": transporte_pct,
+                "transporte_horas": transporte_horas,
                 "resultado_ociosos": (
                     resultado_ociosos
                 ),
@@ -1413,20 +1459,24 @@ if tractores:
 # =====================================================
 
 if resultados_ranking:
+
     df_ranking = pd.DataFrame(
         resultados_ranking
     )
 
-    df_ranking = df_ranking.sort_values(
-        by=[
-            "Puntaje Total",
-            "AutoTrac",
-        ],
-        ascending=[
-            False,
-            False,
-        ],
-    ).reset_index(drop=True)
+    df_ranking = (
+        df_ranking.sort_values(
+            by=[
+                "Puntaje Total",
+                "AutoTrac",
+            ],
+            ascending=[
+                False,
+                False,
+            ],
+        )
+        .reset_index(drop=True)
+    )
 
     df_ranking.insert(
         0,
@@ -1484,6 +1534,7 @@ if resultados_ranking:
     columnas_ranking = [
         "Posición",
         "Tractor",
+        "Modelo",
         "Número de serie",
         "Puntaje Total",
         "Clasificación",
@@ -1494,9 +1545,11 @@ if resultados_ranking:
         use_container_width=True,
         hide_index=True,
         column_config={
-            "Posición": st.column_config.NumberColumn(
-                "Posición",
-                format="%d",
+            "Posición": (
+                st.column_config.NumberColumn(
+                    "Posición",
+                    format="%d",
+                )
             ),
             "Puntaje Total": (
                 st.column_config.ProgressColumn(
@@ -1525,20 +1578,30 @@ if resultados_ranking:
         "Puntaje Total",
     ]
 
-    st.dataframe(
-        df_ranking[columnas_componentes],
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            columna: st.column_config.ProgressColumn(
+    configuracion_componentes = {}
+
+    for columna in columnas_componentes:
+        if columna == "Tractor":
+            continue
+
+        configuracion_componentes[columna] = (
+            st.column_config.ProgressColumn(
                 columna,
                 min_value=0,
                 max_value=100,
                 format="%.1f%%",
             )
-            for columna in columnas_componentes
-            if columna != "Tractor"
-        },
+        )
+
+    st.dataframe(
+        df_ranking[
+            columnas_componentes
+        ],
+        use_container_width=True,
+        hide_index=True,
+        column_config=(
+            configuracion_componentes
+        ),
     )
 
     st.caption(
@@ -1550,31 +1613,93 @@ if resultados_ranking:
 
 
 # =====================================================
+# UTILIZACIÓN OPERATIVA
+# =====================================================
+
+if resultados_ranking:
+
+    st.markdown("---")
+
+    st.header(
+        "2. Utilización operativa"
+    )
+
+    columnas_utilizacion_tabla = [
+        "Tractor",
+        "Trabajo (%)",
+        "Transporte (%)",
+        "Ralentí (%)",
+    ]
+
+    st.dataframe(
+        df_ranking[
+            columnas_utilizacion_tabla
+        ],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Trabajo (%)": (
+                st.column_config.ProgressColumn(
+                    "Trabajo",
+                    min_value=0,
+                    max_value=100,
+                    format="%.1f%%",
+                )
+            ),
+            "Transporte (%)": (
+                st.column_config.ProgressColumn(
+                    "Transporte",
+                    min_value=0,
+                    max_value=100,
+                    format="%.1f%%",
+                )
+            ),
+            "Ralentí (%)": (
+                st.column_config.ProgressColumn(
+                    "Ralentí",
+                    min_value=0,
+                    max_value=100,
+                    format="%.1f%%",
+                )
+            ),
+        },
+    )
+
+
+# =====================================================
 # DETALLE INDIVIDUAL
 # =====================================================
 
 if resultados_detallados:
+
     st.markdown("---")
 
     st.header(
-        "2. Detalle individual por tractor"
+        "3. Detalle individual por tractor"
     )
 
     for resultado in resultados_detallados:
-        alias = resultado["alias"]
-        numero_serie = resultado["numero_serie"]
+
+        tractor = resultado["tractor"]
+        modelo = resultado["modelo"]
+        numero_serie = resultado[
+            "numero_serie"
+        ]
+
         puntajes = resultado[
             "resultado_puntaje"
         ]
+
         ociosos = resultado[
             "resultado_ociosos"
         ]
 
         st.subheader(
-            f"🚜 {alias}"
+            f"🚜 {tractor}"
         )
 
         st.caption(
+            f"Modelo: {modelo} | "
             f"Número de serie: {numero_serie}"
         )
 
@@ -1593,27 +1718,43 @@ if resultados_detallados:
 
         with col_p2:
             st.metric(
-                "Horas en reposo",
+                "Trabajo",
                 (
-                    f"{resultado['horas_reposo']:.1f} h"
+                    f"{resultado['trabajo_pct']:.1f}%"
                 ),
+                delta=(
+                    f"{resultado['trabajo_horas']:.1f} h"
+                ),
+                delta_color="off",
             )
 
         with col_p3:
             st.metric(
-                "Horas con motivo",
+                "Ralentí",
                 (
-                    f"{ociosos['horas_registradas']:.1f} h"
+                    f"{resultado['ralenti_pct']:.1f}%"
                 ),
+                delta=(
+                    f"{resultado['ralenti_horas']:.1f} h"
+                ),
+                delta_color="off",
             )
 
         with col_p4:
             st.metric(
-                "Cobertura de motivos",
+                "Transporte",
                 (
-                    f"{ociosos['porcentaje']:.1f}%"
+                    f"{resultado['transporte_pct']:.1f}%"
                 ),
+                delta=(
+                    f"{resultado['transporte_horas']:.1f} h"
+                ),
+                delta_color="off",
             )
+
+        st.markdown(
+            "#### Composición del puntaje"
+        )
 
         datos_componentes = pd.DataFrame(
             {
@@ -1650,10 +1791,41 @@ if resultados_detallados:
             datos_componentes,
             x="Componente",
             y="Porcentaje",
-            horizontal=True,
             color="#367C2B",
             use_container_width=True,
         )
+
+        st.markdown(
+            "#### Registro de motivos ociosos"
+        )
+
+        col_o1, col_o2, col_o3 = (
+            st.columns(3)
+        )
+
+        with col_o1:
+            st.metric(
+                "Horas totales en ralentí",
+                (
+                    f"{resultado['ralenti_horas']:.1f} h"
+                ),
+            )
+
+        with col_o2:
+            st.metric(
+                "Horas con motivo",
+                (
+                    f"{ociosos['horas_registradas']:.1f} h"
+                ),
+            )
+
+        with col_o3:
+            st.metric(
+                "Cobertura de motivos",
+                (
+                    f"{ociosos['porcentaje']:.1f}%"
+                ),
+            )
 
         if not ociosos["encontrado"]:
             st.warning(
@@ -1664,8 +1836,9 @@ if resultados_detallados:
             )
 
         elif not ociosos["detalle"].empty:
+
             st.markdown(
-                "#### Motivos ociosos registrados"
+                "##### Motivos ordenados de mayor a menor"
             )
 
             st.dataframe(
@@ -1694,10 +1867,10 @@ if resultados_detallados:
             st.info(
                 "El tractor fue encontrado en el Excel, "
                 "pero no presenta horas en las columnas "
-                "de motivos seleccionadas."
+                "de motivos ociosos seleccionadas."
             )
 
-        observaciones = st.text_area(
+        st.text_area(
             "Observaciones:",
             placeholder=(
                 "Ingresá observaciones sobre la "
@@ -1721,32 +1894,42 @@ if resultados_detallados:
 with st.expander(
     "Ver datos cargados"
 ):
-    for tractor in tractores:
+
+    if df_tractores is not None:
         st.markdown(
-            f"#### {tractor['alias']}"
+            "#### Excel consolidado de tractores"
         )
 
         st.write(
-            f"Archivo: {tractor['archivo']}"
-        )
-
-        st.write(
-            f"Registros: {len(tractor['df']):,}"
+            f"Tractores detectados: "
+            f"{len(df_tractores)}"
         )
 
         st.dataframe(
-            tractor["df"].head(),
+            df_tractores,
             use_container_width=True,
+        )
+
+    else:
+        st.info(
+            "Todavía no se cargó el Excel "
+            "consolidado de tractores."
         )
 
     if df_ociosos is not None:
         st.markdown(
-            "#### Archivo de motivos ociosos"
+            "#### Excel de motivos ociosos"
         )
 
         st.dataframe(
-            df_ociosos.head(),
+            df_ociosos,
             use_container_width=True,
+        )
+
+    else:
+        st.info(
+            "Todavía no se cargó el Excel "
+            "de motivos ociosos."
         )
 
 
@@ -1754,9 +1937,9 @@ with st.expander(
 # VALIDACIONES PARA EL INFORME
 # =====================================================
 
-todos_los_csv_cargados = (
-    cantidad_csv_cargados
-    == cantidad_tractores
+excel_tractores_cargado = (
+    df_tractores is not None
+    and not df_tractores.empty
 )
 
 excel_ociosos_cargado = (
@@ -1765,7 +1948,7 @@ excel_ociosos_cargado = (
 
 reporte_listo = (
     cliente_valido
-    and todos_los_csv_cargados
+    and excel_tractores_cargado
     and excel_ociosos_cargado
     and len(resultados_ranking) > 0
 )
@@ -1778,8 +1961,9 @@ reporte_listo = (
 if not reporte_listo:
     st.info(
         "Para registrar el reporte debés seleccionar "
-        "un cliente, cargar todos los CSV de tractores "
-        "y cargar el Excel de motivos ociosos."
+        "un cliente, cargar el Excel consolidado "
+        "de tractores y cargar el Excel de "
+        "motivos ociosos."
     )
 
 if st.button(
@@ -1787,12 +1971,15 @@ if st.button(
     use_container_width=True,
     disabled=not reporte_listo,
 ):
-    registro_correcto = registrar_evento_github(
-        usuario=st.session_state.usuario,
-        accion=(
-            "Exportó Reporte de Tractores a PDF"
-        ),
-        cliente=cliente,
+
+    registro_correcto = (
+        registrar_evento_github(
+            usuario=st.session_state.usuario,
+            accion=(
+                "Exportó Reporte de Tractores a PDF"
+            ),
+            cliente=cliente,
+        )
     )
 
     if registro_correcto:
